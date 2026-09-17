@@ -1,16 +1,12 @@
 import argparse
 
 from src.capture.capture import capture_live, read_pcap
-
+from src.parser.packet_parser import parse_packet
 
 def handle_packet(packet):
-    # Smoke test hiện tại
-    print(packet.summary())
-
-    # TODO:
-    # Sau này thay bằng:
-    # event = parse_packet(packet)
-    # logger.write(event)
+    # print(packet.summary()) smoke test
+    parsed = parse_packet(packet)
+    print(parsed)
 
 
 def main():
