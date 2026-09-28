@@ -30,9 +30,12 @@ def main():
     source.add_argument("--pcap", type=str)
     parser.add_argument(
         "--output", type=Path,
-        default=Path(__file__).resolve().parent / "output" / "events.jsonl",
+        help="Output file (default: output/events_HH-MM-SS-microseconds_DD-MM-YYYY.jsonl)",
     )
     args = parser.parse_args()
+    if args.output is None:
+        started_at = datetime.now().astimezone().strftime("%H-%M-%S-%f_%d-%m-%Y")
+        args.output = Path(__file__).resolve().parent / "output" / f"events_{started_at}.jsonl"
 
     try:
         with JsonlWriter(args.output) as writer:
