@@ -11,6 +11,7 @@ from pathlib import Path
 from src.logging.jsonl_writer import JsonlWriter
 from src.capture.capture import capture_live, read_pcap
 from src.parser.packet_parser import parse_packet
+from src.decoder import decode_event
 
 
 def handle_packet(packet, writer, packet_ids):
@@ -21,6 +22,7 @@ def handle_packet(packet, writer, packet_ids):
         parsed["timestamp"] = datetime.fromtimestamp(
             float(packet.time), tz=timezone.utc
         ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        parsed = decode_event(parsed)
         json.dumps(parsed, ensure_ascii=False, allow_nan=False)
     except Exception as exc:
         print(f"Skipping malformed packet: {type(exc).__name__}: {exc}", file=sys.stderr)
