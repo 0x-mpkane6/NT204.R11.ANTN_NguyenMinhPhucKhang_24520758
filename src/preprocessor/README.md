@@ -77,11 +77,11 @@ Các field length/id kiểm tra 0–65535, ttl 0–255. Thiếu length/ttl/id đ
 ## Kiểm thử
 
 ```bash
-.venv/bin/python -B -m pytest -v TEST/test_preprocessor.py
+.venv/bin/python -B -m pytest -v TEST/TEST-02/test_preprocessor.py
 .venv/bin/python -B -m pytest -v TEST
 ```
 
-Test tập trung T05 normalization, T06 missing fields và T14 malformed event, cùng port/range, timezone, protocol mismatch, policy và bảo toàn đầu vào. Báo cáo lần chạy được lưu trong TEST/result/preprocessor_regression.txt và .xml.
+Test tập trung T05 normalization, T06 missing fields và T14 malformed event, cùng port/range, timezone, protocol mismatch, policy và bảo toàn đầu vào. Báo cáo lần chạy được lưu trong TEST/legacy-results/preprocessor_regression.txt và .xml.
 
 ## AI hỗ trợ
 

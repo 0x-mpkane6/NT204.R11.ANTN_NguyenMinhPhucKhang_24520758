@@ -85,7 +85,7 @@ Sai raw Base64, charset không hỗ trợ, sai schema field hoặc vượt giớ
 Từ thư mục gốc repo:
 
 ```bash
-.venv/bin/python -B -m pytest -v TEST/test_decoder.py
+.venv/bin/python -B -m pytest -v TEST/TEST-02/test_decoder.py
 .venv/bin/python -B -m pytest -v TEST
 ```
 

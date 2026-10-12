@@ -62,12 +62,12 @@ Mặc định file flow có cùng mốc thời gian với file event. Hai đư�
 
 ## Test và giới hạn
 
-`TEST/test_flow_tracker.py` bao phủ handshake (T07), hai chiều (T08), FIN/RST (T09), UDP (T10), concurrent flows (T11), timeout (T12), thống kê (T13), malformed (T14), capacity và tái sử dụng 5-tuple. Test pipeline PCAP kiểm tra event flow_id khớp flow output.
+`TEST/TEST-02/test_flow_tracker.py` bao phủ handshake (T07), hai chiều (T08), FIN/RST (T09), UDP (T10), concurrent flows (T11), timeout (T12), thống kê (T13), malformed (T14), capacity và tái sử dụng 5-tuple. Test pipeline PCAP kiểm tra event flow_id khớp flow output.
 
 ```bash
 .venv/bin/python -B -m pytest -v TEST
 ```
 
-Báo cáo: TEST/result/flow_regression.txt và .xml. Live capture được giả lập trong test, cần kiểm chứng thêm với traffic thực tế. Module không thay thế TCP reassembly hay SMTP DATA buffering.
+Báo cáo: TEST/legacy-results/flow_regression.txt và .xml. Live capture được giả lập trong test, cần kiểm chứng thêm với traffic thực tế. Module không thay thế TCP reassembly hay SMTP DATA buffering.
 
 OpenAI Codex hỗ trợ triển khai, tích hợp pipeline, test và README. Người nộp cần kiểm tra và hiểu mã nguồn.

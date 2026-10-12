@@ -80,3 +80,30 @@ def test_bad_events(data):
 def test_config(config):
     with pytest.raises(ValueError):
         FlowTracker(**config)
+
+
+def test_dns_udp_query_response_pipeline():
+    from scapy.layers.inet import IP, UDP
+    from scapy.layers.dns import DNS, DNSQR, DNSRR
+    from src.parser.packet_parser import parse_packet
+    from src.preprocessor import preprocess_event
+
+    query = IP(bytes(IP(src='10.0.0.1', dst='8.8.8.8')/UDP(sport=12345, dport=53)/DNS(
+        id=7, qd=DNSQR(qname='example.org'))))
+    response = IP(bytes(IP(src='8.8.8.8', dst='10.0.0.1')/UDP(sport=53, dport=12345)/DNS(
+        id=7, qr=1, qd=DNSQR(qname='example.org'),
+        an=DNSRR(rrname='example.org', rdata='1.2.3.4'))))
+    tracker = FlowTracker()
+    results = []
+    for index, packet in enumerate((query, response)):
+        parsed = parse_packet(packet)
+        parsed['timestamp'] = datetime.fromtimestamp(index, timezone.utc).isoformat()
+        results.append(tracker.track(preprocess_event(parsed)))
+    assert results[0]['flow']['flow_id'] == results[1]['flow']['flow_id']
+    flow = tracker.flush()[0]
+    assert flow['application_protocol'] == 'DNS'
+    assert flow['packet_count'] == 2
+    assert flow['byte_count'] == query.len + response.len
+    assert flow['forward_packet_count'] == flow['backward_packet_count'] == 1
+    assert flow['forward_byte_count'] == query.len
+    assert flow['backward_byte_count'] == response.len
