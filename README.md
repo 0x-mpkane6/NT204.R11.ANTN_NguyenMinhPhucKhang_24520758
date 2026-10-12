@@ -51,68 +51,112 @@ TEST/
 │   ├── README.md               Bảng đối chiếu T01–T14
 │   └── result/                 Báo cáo pytest TXT/XML
 └── legacy-results/             Báo cáo cũ, không phải kết quả mới nhất
+pcap/
+└── test-traffic.pcap            File mẫu đã capture để kiểm tra offline
 output/                         Event/flow JSONL sinh khi chạy, không commit
 ```
 
 Tài liệu chi tiết: [Decoder](src/decoder/README.md), [Preprocessor](src/preprocessor/README.md), [Flow Tracker](src/flow/README.md).
 
-## Cài đặt
+## 1. Dựng môi trường
 
-Các lệnh dưới đây chạy từ thư mục gốc repo trên Linux. Môi trường phát triển đã dùng Python 3.14.
+Chạy các lệnh từ thư mục gốc repo trên Linux. Cần Python và module venv; môi trường phát triển đã dùng Python 3.14.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-## Usage
+Các ví dụ bên dưới dùng `.venv/bin/python` trực tiếp để bảo đảm dùng đúng môi trường, kể cả khi chạy với `sudo`. Phân tích PCAP và test tự động thường không cần sudo; live capture cần quyền bắt packet.
 
-### Live capture
+Xem hướng dẫn CLI:
 
-Xem danh sách interface:
+```bash
+.venv/bin/python main.py --help
+```
+
+## 2. Các cờ và tham số cần lưu ý
+
+| Cờ | Giá trị truyền vào | Ý nghĩa / mặc định |
+|---|---|---|
+| `-h`, `--help` | Không có | Hiển thị hướng dẫn rồi thoát |
+| `--interface` | Tên interface, ví dụ `wlp8s0` | Bắt traffic realtime |
+| `--pcap` | Đường dẫn file | Đọc PCAP đã capture; ví dụ mẫu: `pcap/test-traffic.pcap` |
+| `--output` | Đường dẫn `.jsonl` | Event log; mặc định tạo tên theo thời gian trong `output/` |
+| `--flow-output` | Đường dẫn `.jsonl` | Tổng kết flow; mặc định cùng thư mục và mốc tên với event log, tiền tố `flows_` |
+| `--tcp-timeout` | Số giây dương, hữu hạn | Idle timeout TCP; mặc định `120` |
+| `--udp-timeout` | Số giây dương, hữu hạn | Idle timeout UDP; mặc định `30` |
+| `--max-flows` | Số nguyên dương | Tối đa active flows; mặc định `10000` |
+
+- Bắt buộc chọn **đúng một** trong `--interface` và `--pcap`; không truyền cả hai.
+- `pcap/test-traffic.pcap` là file mẫu dùng trong hướng dẫn, **không phải giá trị CLI tự chọn** khi bỏ `--pcap`.
+- Timeout là thời gian flow không có packet mới, không phải thời gian tự dừng capture. Khi hết hạn, flow được xuất và xóa khỏi active table.
+- Khi đầy active table, chương trình xuất flow có last_seen cũ nhất để tạo chỗ cho flow mới.
+- Hai đường dẫn output phải khác nhau. File chỉ định đã tồn tại sẽ được ghi nối tiếp; muốn tách từng lần chạy thì bỏ các cờ output để dùng tên theo thời gian.
+- Decoder có giới hạn API `max_field_bytes`; Preprocessor có API `invalid_policy`/`unsupported_policy`. Các tham số này chưa có cờ CLI riêng.
+
+## 3. Kiểm tra với traffic realtime
+
+### Chọn interface
 
 ```bash
 ip link show
 ```
 
-Thay `wlp8s0` bằng interface thực tế trên máy:
+Chọn interface đang có traffic cần quan sát. Ví dụ Wi-Fi trên máy phát triển là `wlp8s0`; traffic giữa các chương trình trên cùng máy có thể đi qua `lo`.
+
+### Chạy capture
 
 ```bash
 sudo .venv/bin/python main.py --interface wlp8s0
 ```
 
-Chương trình vừa in event ra terminal vừa ghi JSONL. Nhấn **Ctrl+C** để dừng và xuất các flow còn lại. Timeout là thời gian flow không có packet mới, **không phải thời gian tự dừng chương trình**.
-
-### Đọc PCAP
+Hoặc chỉ định cấu hình flow:
 
 ```bash
-.venv/bin/python main.py --pcap /path/to/capture.pcap
+sudo .venv/bin/python main.py --interface wlp8s0 \
+  --tcp-timeout 120 --udp-timeout 30 --max-flows 10000
 ```
 
-Chương trình xử lý đến hết file rồi xuất flow còn lại. Cần cung cấp file PCAP có sẵn; `*.pcap` đang được bỏ qua trong `.gitignore`.
+Trong lúc chương trình chạy, tạo traffic từ ứng dụng hoặc máy chủ thử nghiệm: DNS query, HTTP plaintext, SMTP plaintext. HTTPS/TLS không được giải mã nên application có thể là UNKNOWN; điều đó không đồng nghĩa capture bị lỗi.
 
-### Chọn file output và cấu hình flow
+Theo dõi ngay trên terminal:
+
+- Event có địa chỉ IP, port và timestamp của packet.
+- HTTP/DNS/SMTP được nhận diện khi payload phù hợp và đủ dữ liệu.
+- `decoded`, `decode_status` thể hiện kết quả decoder.
+- `normalized`, `preprocess_status` thể hiện kết quả preprocessor.
+- `flow` chứa flow_id, direction và state nếu packet đủ điều kiện tracking.
+
+Chương trình đồng thời ghi file trong `output/`, hiển thị đường dẫn lúc khởi động. Nhấn **Ctrl+C** để dừng; các flow còn lại được xuất trước khi đóng file. Flow log có thể trống lúc đầu vì flow chưa đóng hoặc chưa timeout.
+
+Live mode hiện ghi **event/flow JSONL**, không tự lưu raw packet thành PCAP. Nếu cần lưu thêm PCAP cho lần chạy sau, dùng công cụ capture riêng như Wireshark hoặc tcpdump. File mẫu bên dưới đã được capture sẵn, không cần bước tự sinh dữ liệu.
+
+## 4. Phân tích file PCAP đã capture
+
+File mẫu đặt tại **`pcap/test-traffic.pcap`**. Chạy từ thư mục gốc repo:
 
 ```bash
-.venv/bin/python main.py --pcap /path/to/capture.pcap \
-  --output output/events_demo.jsonl \
-  --flow-output output/flows_demo.jsonl \
+.venv/bin/python main.py --pcap pcap/test-traffic.pcap
+```
+
+Chương trình chạy cùng pipeline như realtime, đọc đến hết file rồi xuất các flow còn lại. Timestamp event lấy từ PCAP; timeout flow dựa trên thời gian packet, không dựa tốc độ đọc file.
+
+Để chỉ định rõ tên file kết quả:
+
+```bash
+.venv/bin/python main.py --pcap pcap/test-traffic.pcap \
+  --output output/events_test-traffic.jsonl \
+  --flow-output output/flows_test-traffic.jsonl \
   --tcp-timeout 120 \
   --udp-timeout 30 \
   --max-flows 10000
 ```
 
-| Tham số | Ý nghĩa | Mặc định |
-|---|---|---|
-| `--interface` | Interface để bắt packet | Chọn một trong interface/pcap |
-| `--pcap` | File PCAP đầu vào | Chọn một trong interface/pcap |
-| `--output` | File event JSONL | File mới theo thời gian trong output/ |
-| `--flow-output` | File tổng kết flow | Cùng thư mục với event, tên có tiền tố flows_ |
-| `--tcp-timeout` | Idle timeout TCP, giây | 120 |
-| `--udp-timeout` | Idle timeout UDP, giây | 30 |
-| `--max-flows` | Số flow hoạt động tối đa | 10000 |
+Kiểm tra kết quả bằng cách mở hai file JSONL trong editor. Không so sánh flow_id giữa live/offline vì ID được tạo mới mỗi lần chạy; đối chiếu endpoint, protocol, direction, counters và nội dung giải mã. Kết quả phụ thuộc traffic thực sự có trong PCAP; không mặc định file có đủ tất cả giao thức/testcase.
 
-Hai đường dẫn output phải khác nhau. Decoder có giới hạn qua API `max_field_bytes`; Preprocessor có policy qua API `invalid_policy`/`unsupported_policy`. Các tùy chọn API này chưa có CLI riêng.
+Nếu clone repo mà thiếu file mẫu, đặt bản capture vào đúng đường dẫn trên; `*.pcap` đang được bỏ qua bởi `.gitignore`.
 
 ## Đọc kết quả output
 
