@@ -2,6 +2,8 @@ import re
 
 from scapy.layers.inet import TCP
 
+from .content import raw_base64, content_metadata
+
 _REQUEST = re.compile(rb"([A-Z][A-Z0-9!#$%&'*+.^_`|~-]*) ([^\x00-\x20]+) HTTP/(1\.[01])")
 _RESPONSE = re.compile(rb"HTTP/(1\.[01]) ([1-5][0-9]{2})(?: ([^\r\n]*))?")
 
@@ -16,9 +18,11 @@ def parse_http(packet):
         response = _RESPONSE.fullmatch(first_line)
         if not newline or not (request or response):
             return None
-        result = {"protocol": "HTTP", "headers": {}, "errors": []}
+        result = {"protocol": "HTTP", "headers": {}, "errors": [],
+                  "raw_payload_base64": raw_base64(payload)}
         if request:
             method, target, version = request.groups()
+            result["raw_uri_base64"] = raw_base64(target)
             result.update(type="request", method=method.decode("ascii"),
                           uri=target.decode("utf-8", errors="replace"),
                           version="HTTP/" + version.decode("ascii"))
@@ -41,6 +45,8 @@ def parse_http(packet):
                 continue
             key = name.decode("ascii").lower()
             result["headers"].setdefault(key, []).append(value.strip().decode("latin-1"))
+        result.update(content_metadata(result["headers"]))
+        result["raw_body_base64"] = raw_base64(body)
         result["body"] = body.decode("utf-8", errors="replace")
         result["body_length"] = len(body)
         lengths = result["headers"].get("content-length", [])
