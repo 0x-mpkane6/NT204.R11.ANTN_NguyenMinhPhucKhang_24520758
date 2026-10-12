@@ -2,7 +2,7 @@ from scapy.all import sniff, PcapReader, get_if_list
 from scapy.error import Scapy_Exception
 
 
-def capture_live(interface, handler):
+def capture_live(interface, handler, on_idle=None):
     interfaces = get_if_list()
     if interface not in interfaces:
         raise ValueError(
@@ -16,12 +16,15 @@ def capture_live(interface, handler):
         except Exception as exc:
             failures.append(exc)
 
-    sniff(
-        iface=interface,
-        prn=dispatch,
-        stop_filter=lambda packet: bool(failures),
-        store=False
-    )
+    while True:
+        options = {'timeout': 1} if on_idle else {}
+        sniff(
+            iface=interface, prn=dispatch,
+            stop_filter=lambda packet: bool(failures), store=False, **options
+        )
+        if failures or on_idle is None:
+            break
+        on_idle()
 
     if failures:
         raise failures[0]
