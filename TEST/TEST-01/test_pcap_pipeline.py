@@ -27,6 +27,9 @@ def test_real_pcap_to_jsonl(tmp_path, monkeypatch):
     events = [json.loads(line) for line in target.read_text().splitlines()]
     assert [e['application']['protocol'] for e in events] == ['HTTP', 'DNS', 'SMTP', 'UNKNOWN']
     assert [e['packet_id'] for e in events] == [1, 2, 3, 4]
+    flows = [json.loads(line) for line in (tmp_path/'flows_events.jsonl').read_text().splitlines()]
+    assert sum(flow['packet_count'] for flow in flows) == 4
+    assert {e['flow']['flow_id'] for e in events} == {flow['flow_id'] for flow in flows}
     assert all(e['timestamp'] == '2023-11-14T22:13:20.123456Z' for e in events)
 
 

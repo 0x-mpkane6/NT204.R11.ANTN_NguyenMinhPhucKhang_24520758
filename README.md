@@ -54,8 +54,8 @@ Chạy toàn bộ test:
 ```
 
 Báo cáo:
-- TEST/result/pytest.txt: kết quả dành cho người đọc.
-- TEST/result/pytest.xml: kết quả theo định dạng JUnit XML.
+- TEST/legacy-results/pytest.txt: kết quả dành cho người đọc.
+- TEST/legacy-results/pytest.xml: kết quả theo định dạng JUnit XML.
 
 Kết quả lần chạy đã lưu: 53 tests passed.
 

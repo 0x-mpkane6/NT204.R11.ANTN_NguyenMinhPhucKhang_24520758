@@ -14,7 +14,7 @@ def test_capture_writes_events(tmp_path, monkeypatch, source):
     packet = IP()/TCP()/Raw(b"GET / HTTP/1.1\r\n\r\n")
     packet.time = 0
 
-    def capture(value, handler):
+    def capture(value, handler, **kwargs):
         assert value == "test-source"
         handler(Raw(b"unsupported"))
         handler(packet)
