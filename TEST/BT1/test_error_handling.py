@@ -72,3 +72,20 @@ def test_invalid_pcap(tmp_path, contents):
         path.write_bytes(contents)
     with pytest.raises(Scapy_Exception, match='Cannot open PCAP'):
         capture.read_pcap(str(path), lambda p: None)
+
+
+def test_live_interrupt_exits_without_restarting(monkeypatch):
+    monkeypatch.setattr(capture, 'get_if_list', lambda: ['test0'])
+    calls = []
+
+    def sniff(**kwargs):
+        calls.append(kwargs)
+        if kwargs.get('chainCC'):
+            raise KeyboardInterrupt
+        if len(calls) > 1:
+            pytest.fail('Capture restarted after interrupt')
+
+    monkeypatch.setattr(capture, 'sniff', sniff)
+    with pytest.raises(KeyboardInterrupt):
+        capture.capture_live('test0', lambda packet: None, on_idle=lambda: None)
+    assert len(calls) == 1
