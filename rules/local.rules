@@ -1,0 +1,4 @@
+# Demonstration signatures; matches are indicators, not proof of an attack.
+alert tcp any any -> any any (msg:"DEMO HTTP GET observed"; content:"GET "; offset:0; depth:4; sid:100001; rev:1; priority:3;)
+alert tcp any any -> any any (msg:"DEMO traversal sequence in payload"; content:"../"; sid:100002; rev:1; classtype:web-application-attack; priority:2;)
+alert tcp any any -> any any (msg:"DEMO SMTP EHLO observed"; content:"EHLO "; nocase; offset:0; depth:5; sid:100003; rev:1; priority:3;)

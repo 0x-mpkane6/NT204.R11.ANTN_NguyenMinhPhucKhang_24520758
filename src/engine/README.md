@@ -1,6 +1,6 @@
 # Engine input — bước nền bài 3
 
-Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer, Matching Engine, Evaluation Engine và Detection Generator. Chưa tích hợp main/CLI.
+Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer, Matching Engine, Evaluation Engine và Detection Generator. Đã tích hợp main/CLI; xem phần cuối tài liệu.
 
 ```python
 from src.engine import build_context
@@ -191,7 +191,7 @@ Test: TEST/BT3/test_matching.py; bao phủ header short-circuit, flow observed/i
 
 ## Evaluation Engine và Detection Event Generator
 
-`evaluator.py` có `EvaluationEngine`, `EvaluationResult`. `detection.py` có hàm thuần `generate_detection`. Chúng chưa nối vào main/CLI; bước kế tiếp là cấu hình rule và output detection cho chương trình chạy thực tế.
+`evaluator.py` có `EvaluationEngine`, `EvaluationResult`. `detection.py` có hàm thuần `generate_detection`. Đã nối main/CLI; cấu hình rule và output detection được trình bày bên dưới.
 
 ```python
 from src.engine import load_rules, RuleRepository, EvaluationEngine
@@ -216,3 +216,29 @@ Detection có event_type=detection, timestamp packet, packet_id, sid/rev/msg, pr
 Generator chỉ chấp nhận complete MATCH có SID đúng rule. Không deduplicate giữa các packet: cùng rule match hai event sẽ sinh hai detection. Event JSONL, flow JSONL và detection JSONL là ba loại dữ liệu khác nhau.
 
 Test: TEST/BT3/test_evaluator.py, kiểm tra nhiều rule cùng match (yêu cầu 13), schema detection (14), counters, không có candidates, invalid input, giới hạn và lỗi rule riêng lẻ. Báo cáo: TEST/BT3/result/evaluation.txt và .xml.
+
+## Tích hợp chạy live/PCAP
+
+main.py đã nạp rule một lần, tạo Repository/Matcher/Evaluator một lần, gọi evaluate sau tracking và packet_id. Ghi detection qua JsonlWriter riêng; event có evaluation metadata. Matching Engine vẫn không in/ghi alert; CLI in thông báo detection và thống kê cuối phiên.
+
+```bash
+.venv/bin/python main.py --pcap pcap/test-traffic.pcap --rules rules/local.rules
+sudo .venv/bin/python main.py --interface wlp8s0 --rules rules/local.rules
+```
+
+Mặc định dùng rules/local.rules theo thư mục repo. Đây là rule demo tự viết theo cú pháp hỗ trợ, không phải bộ rule Snort sản xuất. Không truyền --rules vẫn bật engine với file mặc định.
+
+| Cờ | Ý nghĩa |
+|---|---|
+| --rules PATH | Có thể lặp lại để nạp nhiều file; thay danh sách mặc định |
+| --disable-rule-file PATH | Có thể lặp; bỏ mở file tương ứng trong danh sách --rules |
+| --disable-sid N | Có thể lặp; disable SID, ưu tiên hơn enable |
+| --enable-sid N | Allowlist; khi có cờ thì chỉ nạp các SID đã chỉ định |
+| --detection-output PATH | File JSONL detection, mặc định detections_<cùng mốc tên event>.jsonl |
+| --allow-inferred-established | Cho flow:established chấp nhận suy luận midstream; mặc định chỉ handshake quan sát |
+
+Rule invalid/unsupported, file thiếu, SID disable/trùng đều có diagnostic trên stderr. Không còn rule active thì cảnh báo rõ và tiếp tục capture với 0 detection. File output append; ba đường dẫn output phải khác nhau và không trùng file PCAP/rule đầu vào. Detection file rỗng nếu không có match là bình thường.
+
+Live và PCAP dùng chung callback. Lỗi ghi detection được truyền ra ngoài để dừng có kiểm soát; không giả vờ ghi thành công. Khi kết thúc in counters engine. Event/flow/detection được ghi riêng, chưa có transaction đảm bảo cả ba đồng thời khi lỗi đĩa.
+
+Test CLI chạy subprocess thật với PCAP và hai rule cùng match; live callback được giả lập, chưa chứng minh live interface thực. TEST/BT3/test_engine_cli.py, báo cáo TEST/BT3/result/integration.txt và .xml.
