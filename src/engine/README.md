@@ -1,6 +1,6 @@
 # Engine input — bước nền bài 3
 
-Hiện có context adapter và Internal Rule Object + Parser/Validator. Chưa có Loader, Repository, matcher/evaluator.
+Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Chưa có Repository, matcher/evaluator.
 
 ```python
 from src.engine import build_context
@@ -41,7 +41,7 @@ OpenAI Codex hỗ trợ triển khai và kiểm thử bước này.
 
 ## Internal Rule Object và Parser/Validator
 
-Bước tiếp theo đã có; chưa có Loader, Repository hoặc Matching Engine.
+Parser/Validator đã có; Rule Loader được trình bày bên dưới. Chưa có Repository hoặc Matching Engine.
 
 | File | Vai trò |
 |---|---|
@@ -85,3 +85,34 @@ Rule giữ header, msg/sid/rev, danh sách content theo thứ tự, flow, flags,
 Rule lỗi không trả object có thể chạy một phần. Parser báo vấn đề đầu tiên gặp; một rule vừa có lỗi vừa có keyword unsupported có thể được phân loại theo vấn đề gặp trước. Comment/dòng trống, rule nhiều dòng và enable/disable thuộc Loader sẽ làm sau. ip/any ở vị trí protocol chưa được hỗ trợ, giữ phạm vi bắt buộc tcp/udp của bảng đề bài; không nhầm với any ở địa chỉ/port.
 
 Test: TEST/BT3/test_rule_parser.py. Chạy cùng context và hồi quy hai bài trước; kết quả tại TEST/BT3/result/rule_parser.txt và .xml.
+
+## Rule Loader
+
+`rule_loader.py` đọc một/nhiều file và gọi Parser/Validator cho từng dòng có nội dung. Loader chưa được nối CLI/main; chưa có Repository/Matching Engine.
+
+```python
+from src.engine import RuleFile, load_rules
+
+report = load_rules(
+    [RuleFile('rules/local.rules'), RuleFile('rules/disabled.rules', enabled=False)],
+    disabled_sids={100002},
+    enabled_sids=None,
+)
+for rule in report.rules:
+    print(rule.sid, rule.source, rule.line_number)
+for warning in report.diagnostics:
+    print(warning)
+print(report.counts)
+```
+
+- RuleFile gồm path và enabled; cũng nhận trực tiếp str/Path. Path tương đối tính từ working directory.
+- disabled_sids là danh sách SID không được nạp. enabled_sids=None cho phép tất cả, tập rỗng không cho phép SID nào; nếu SID nằm trong cả hai thì disable ưu tiên.
+- File bị disable không được mở. Rule bị disable vẫn được parse để lấy SID chính xác; rule sai/unsupported vẫn được báo lỗi.
+- Bỏ dòng trống và comment bắt đầu bằng # ngoài quoted string. Dấu # trong msg/content được giữ; xử lý escaped quote. Hỗ trợ UTF-8 BOM đầu file.
+- Mỗi dòng chứa một rule hoàn chỉnh. Chưa nối multiline/backslash continuation; các dòng đó sẽ được parser phân loại thay vì đoán nội dung.
+- Lỗi mở/đọc file có file_error; lỗi UTF-8 của một dòng là invalid và tiếp tục dòng sau. Rule invalid/unsupported không nằm trong report.rules.
+- SID trùng: giữ rule valid/enabled đầu tiên theo thứ tự file/dòng, báo duplicate_sid cho rule sau, không tự chọn revision cao nhất.
+
+RuleLoadReport.rules là danh sách dùng cho Repository sau này. results giữ kết quả parse kể cả rule valid bị disable/trùng. diagnostics chứa status, source, line_number, reasons, sid; caller hiển thị/ghi cảnh báo, Loader không tự in ra stdout. counts tổng hợp loaded, invalid, unsupported, disabled_rules/files, file_errors và duplicates. Cấu hình sai kiểu SID/enabled gây ValueError, khác với lỗi dữ liệu rule được thu thập an toàn.
+
+Test: TEST/BT3/test_rule_loader.py; báo cáo hồi quy: TEST/BT3/result/rule_loader.txt và .xml.
