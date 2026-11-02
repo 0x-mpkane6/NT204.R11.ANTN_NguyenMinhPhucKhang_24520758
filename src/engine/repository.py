@@ -27,7 +27,7 @@ class RuleRepository:
             raise ValueError('Duplicate SID: ' + str(rule.sid))
         stored = deepcopy(rule)
         header = stored.header
-        if header.action != 'alert' or header.protocol not in ('tcp', 'udp') or header.direction not in ('->', '<>'):
+        if header.action != 'alert' or header.protocol not in ('tcp', 'udp', 'ip', 'any') or header.direction not in ('->', '<>'):
             raise ValueError('Unsupported rule header')
         networks = tuple(None if address == 'any' else ipaddress.IPv4Network(address)
                          for address in (header.src_ip, header.dst_ip))
@@ -67,9 +67,11 @@ class RuleRepository:
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
             self.last_query['reason'] = str(exc)
             return []
-        pool = set(self._any.get(protocol, ()))
-        pool.update(self._exact.get(protocol, {}).get(dport, ()))
-        pool.update(index for low, high, index in self._ranges.get(protocol, ()) if low <= dport <= high)
+        pool = set()
+        for bucket in (protocol, 'ip', 'any'):
+            pool.update(self._any.get(bucket, ()))
+            pool.update(self._exact.get(bucket, {}).get(dport, ()))
+            pool.update(index for low, high, index in self._ranges.get(bucket, ()) if low <= dport <= high)
         selected = []
         for index in sorted(pool):
             rule = self._rules[index]

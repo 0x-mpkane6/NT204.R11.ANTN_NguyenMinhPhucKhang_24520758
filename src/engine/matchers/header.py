@@ -2,7 +2,9 @@ import ipaddress
 
 
 def match_header(header, context):
-    if context['protocol'].lower() != header.protocol:
+    if context['protocol'].lower() not in ('tcp', 'udp'):
+        return False
+    if header.protocol not in ('ip', 'any') and context['protocol'].lower() != header.protocol:
         return False
     src, dst = (ipaddress.IPv4Address(context[key]) for key in ('src_ip', 'dst_ip'))
     sport, dport = context['src_port'], context['dst_port']

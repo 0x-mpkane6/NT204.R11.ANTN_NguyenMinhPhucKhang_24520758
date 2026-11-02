@@ -78,3 +78,16 @@ def test_loader_integration(tmp_path):
     path.write_text('alert tcp any any -> any 80 (msg:"x"; sid:1; rev:1;)\ninvalid')
     report = load_rules([path])
     assert ids(RuleRepository(report.rules), context()) == [1]
+
+
+def test_ip_tcp_udp_any_candidates():
+    from src.engine import RuleMatcher
+    repo = RuleRepository([rule(1, 'ip any any -> any any'),
+                           rule(2, 'any any any <> any any'),
+                           rule(3, 'tcp any any -> any 80'),
+                           rule(4, 'udp any any -> any 80'),
+                           rule(5, 'ip 198.51.100.0/24 any -> any any')])
+    for protocol, expected in [('TCP', [1, 2, 3]), ('UDP', [1, 2, 4])]:
+        data = context(protocol=protocol)
+        assert ids(repo, data) == expected
+        assert all(RuleMatcher().match(r, data).status == 'MATCH' for r in repo.candidates(data))

@@ -82,7 +82,7 @@ Rule giữ header, msg/sid/rev, danh sách content theo thứ tự, flow, flags,
 - invalid: cú pháp/giá trị sai, field bắt buộc thiếu, duplicate option đơn hoặc điều kiện mâu thuẫn.
 - unsupported: action/protocol/keyword nằm ngoài tập hỗ trợ, biến $HOME_NET, IP/port list/negation, content negation, flag modifier, escape ngoài tập hỗ trợ.
 
-Rule lỗi không trả object có thể chạy một phần. Parser báo vấn đề đầu tiên gặp; một rule vừa có lỗi vừa có keyword unsupported có thể được phân loại theo vấn đề gặp trước. Comment/dòng trống, rule nhiều dòng và enable/disable thuộc Loader sẽ làm sau. ip/any ở vị trí protocol chưa được hỗ trợ, giữ phạm vi bắt buộc tcp/udp của bảng đề bài; không nhầm với any ở địa chỉ/port.
+Rule lỗi không trả object có thể chạy một phần. Parser báo vấn đề đầu tiên gặp; một rule vừa có lỗi vừa có keyword unsupported có thể được phân loại theo vấn đề gặp trước. Comment/dòng trống, rule nhiều dòng và enable/disable thuộc Loader sẽ làm sau. Protocol ip/any hiện là nhóm chung cho event IPv4 TCP/UDP để bao phủ testcase 6; any protocol là mở rộng của project, không tuyên bố tương thích toàn bộ Snort.
 
 Test: TEST/BT3/test_rule_parser.py. Chạy cùng context và hồi quy hai bài trước; kết quả tại TEST/BT3/result/rule_parser.txt và .xml.
 
@@ -141,7 +141,7 @@ Chỉ khởi tạo repository một lần khi nạp rule. `add(rule)` thêm rule
 4. Kiểm tra cả hai IP/CIDR, source/destination port và direction trên tập vừa lấy.
 5. Trả rule không trùng, giữ thứ tự nạp ban đầu.
 
-IP any là wildcard và port any là khoảng 0–65535. Protocol ip/any chưa được parser hỗ trợ; không được coi chúng là wildcard một cách âm thầm. CIDR được biên dịch thành IPv4Network một lần khi thêm rule.
+IP any là wildcard và port any là khoảng 0–65535. Protocol ip/any là nhóm rule chung, được truy vấn cùng bucket TCP hoặc UDP; chỉ áp dụng event IPv4 TCP/UDP hiện có. CIDR được biên dịch thành IPv4Network một lần khi thêm rule.
 
 ### Hiệu năng và bảo toàn dữ liệu
 

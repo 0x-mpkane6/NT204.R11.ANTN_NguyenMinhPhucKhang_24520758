@@ -73,7 +73,7 @@ def parse_rule(text, source=None, line_number=None):
         action, protocol, src, sport, direction, dst, dport = fields
         if action != 'alert':
             raise UnsupportedRule('Unsupported action: ' + action)
-        if protocol not in ('tcp', 'udp'):
+        if protocol not in ('tcp', 'udp', 'ip', 'any'):
             raise UnsupportedRule('Unsupported protocol: ' + protocol)
         if direction not in ('->', '<>'):
             raise UnsupportedRule('Unsupported direction: ' + direction)
