@@ -14,3 +14,7 @@ __all__ += ['RuleRepository']
 from .matcher import RuleMatcher, MatchResult
 
 __all__ += ['RuleMatcher', 'MatchResult']
+from .evaluator import EvaluationEngine, EvaluationResult
+from .detection import generate_detection
+
+__all__ += ['EvaluationEngine', 'EvaluationResult', 'generate_detection']

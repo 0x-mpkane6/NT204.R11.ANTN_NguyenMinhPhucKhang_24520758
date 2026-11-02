@@ -1,6 +1,6 @@
 # Engine input — bước nền bài 3
 
-Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer và Matching Engine; chưa có Evaluator/Detection Generator.
+Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer, Matching Engine, Evaluation Engine và Detection Generator. Chưa tích hợp main/CLI.
 
 ```python
 from src.engine import build_context
@@ -157,7 +157,7 @@ Test: TEST/BT3/test_repository.py, bao phủ protocol, any/CIDR, exact/range/bou
 
 ## Rule Matching Engine
 
-`matcher.py` cung cấp `RuleMatcher` và `MatchResult`; `matchers/` chứa header.py, flow.py, packet.py, content.py. Đây là một module matching với các thành phần nội bộ. Chưa có Evaluator/Detection Generator hoặc tích hợp CLI.
+`matcher.py` cung cấp `RuleMatcher` và `MatchResult`; `matchers/` chứa header.py, flow.py, packet.py, content.py. Đây là một module matching với các thành phần nội bộ. Evaluator/Detection Generator được trình bày bên dưới; chưa tích hợp CLI.
 
 ```python
 from src.engine import RuleMatcher
@@ -188,3 +188,31 @@ Content mặc định tìm trong buffers.payload. Có thể chọn buffer_name k
 Giới hạn mặc định: max_buffer_bytes=1 MiB, max_content_steps=100000 lần tìm kiếm trong một rule. Vượt giới hạn trả NO_MATCH với complete=False và reason riêng. Không có stream reassembly, regex hay keyword ngoài phạm vi parser.
 
 Test: TEST/BT3/test_matching.py; bao phủ header short-circuit, flow observed/inferred/unknown, content case, offset/depth, distance/within, backtracking, binary, flags/dsize, evidence và giới hạn. Báo cáo hồi quy: TEST/BT3/result/matching.txt và .xml.
+
+## Evaluation Engine và Detection Event Generator
+
+`evaluator.py` có `EvaluationEngine`, `EvaluationResult`. `detection.py` có hàm thuần `generate_detection`. Chúng chưa nối vào main/CLI; bước kế tiếp là cấu hình rule và output detection cho chương trình chạy thực tế.
+
+```python
+from src.engine import load_rules, RuleRepository, EvaluationEngine
+
+report = load_rules(['rules/local.rules'])
+engine = EvaluationEngine(RuleRepository(report.rules))
+result = engine.evaluate(event)
+for detection in result.detections:
+    writer.write(detection)
+print(result.status, result.diagnostics)
+print(engine.stats)
+```
+
+`evaluate` nhận event sau preprocessing/tracking (không nhận context hoặc Scapy packet). Engine gọi build_context → repository.candidates → matcher cho từng candidate → generator. Một instance engine dùng cho cả phiên để tích lũy counters. Không dừng ở match đầu tiên, không tự in alert hoặc ghi file.
+
+EvaluationResult gồm status, detections, diagnostics, candidate_count, evaluated_count. Status complete nghĩa đánh giá hoàn tất trong phạm vi matcher hiện có, không đồng nghĩa packet an toàn. partial nghĩa context thiếu dữ liệu, giới hạn matching hoặc lỗi riêng một rule; vẫn giữ detections hợp lệ của rule khác. invalid là context/header không dùng được, không đánh giá rule. Lỗi matcher/generator được thu thập theo SID và tiếp tục; lỗi cấu hình/repository là lỗi hệ thống, không bị âm thầm che giấu.
+
+Stats là bản sao: events_received, events_evaluated (context/header hợp lệ, kể cả 0 candidates), invalid_events, candidate_rules, rules_evaluated, matches (detection được tạo thành công), incomplete_rules, rule_errors. Các counters cộng dồn, không reset sau mỗi event.
+
+Detection có event_type=detection, timestamp packet, packet_id, sid/rev/msg, priority/classtype (null khi thiếu), src/dst IP/port, protocol, application_protocol, flow_id (null khi không có), match_info, rule_source/rule_line. match_info chứa vị trí byte và pattern_hex của content. Rule chỉ có header/flags có thể match với contents=[]; không tạo evidence content giả. Không đưa bytes payload hoặc toàn bộ context vào JSON detection.
+
+Generator chỉ chấp nhận complete MATCH có SID đúng rule. Không deduplicate giữa các packet: cùng rule match hai event sẽ sinh hai detection. Event JSONL, flow JSONL và detection JSONL là ba loại dữ liệu khác nhau.
+
+Test: TEST/BT3/test_evaluator.py, kiểm tra nhiều rule cùng match (yêu cầu 13), schema detection (14), counters, không có candidates, invalid input, giới hạn và lỗi rule riêng lẻ. Báo cáo: TEST/BT3/result/evaluation.txt và .xml.
