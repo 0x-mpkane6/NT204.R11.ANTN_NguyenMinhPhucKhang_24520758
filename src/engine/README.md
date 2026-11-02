@@ -1,6 +1,6 @@
 # Engine input — bước nền bài 3
 
-Hiện chỉ có `context.py`, chưa có rule parser/matcher/evaluator.
+Hiện có context adapter và Internal Rule Object + Parser/Validator. Chưa có Loader, Repository, matcher/evaluator.
 
 ```python
 from src.engine import build_context
@@ -38,3 +38,50 @@ Giới hạn: quan sát handshake theo flags/direction, chưa kiểm tra đầy 
 `TEST/BT3/test_context.py`: payload TCP/UDP (rỗng và binary), bảo toàn đầu vào, flow roles, handshake/midstream, FIN, thiếu/sai/giới hạn buffer và buffer decoded độc lập. Đây là test nền, chưa phải đủ 14 testcase của đề bài 3.
 
 OpenAI Codex hỗ trợ triển khai và kiểm thử bước này.
+
+## Internal Rule Object và Parser/Validator
+
+Bước tiếp theo đã có; chưa có Loader, Repository hoặc Matching Engine.
+
+| File | Vai trò |
+|---|---|
+| models.py | Dataclass RuleHeader, ContentCondition, Rule, RuleParseResult |
+| rule_parser.py | Tách header/options theo dấu nháy và escape, parse content text/hex, tạo object |
+| rule_validator.py | Kiểm tra IPv4/CIDR, port, số nguyên, quan hệ giữa các option |
+
+```python
+from src.engine import parse_rule
+
+result = parse_rule(
+    'alert tcp any any -> 192.0.2.0/24 80 (msg:"Demo"; content:"admin"; nocase; sid:100001; rev:1;)',
+    source='local.rules', line_number=1,
+)
+if result.status == 'valid':
+    internal_rule = result.rule
+else:
+    print(result.status, result.reasons)
+```
+
+Rule giữ header, msg/sid/rev, danh sách content theo thứ tự, flow, flags, dsize, classification và vị trí nguồn. Pattern là bytes để matcher dùng byte offset. Object nội bộ không phải JSON output. Parser không đọc file, không match event và không in thông báo.
+
+### Phạm vi cú pháp
+
+- alert; tcp/udp; direction -> hoặc <>.
+- IP any, IPv4 hoặc CIDR (chuẩn hóa network); port any, số đơn, khoảng a:b, :b, a:.
+- msg, sid và rev bắt buộc theo chính sách project; sid/rev/priority là số nguyên dương.
+- content dạng chuỗi, hex block như `|00 FF|`, escape quote/backslash/semicolon/colon/pipe. Text literal được mã hóa UTF-8; nên dùng hex cho bytes đặc biệt.
+- nocase, offset/depth/distance/within gắn với content gần nhất. Offset/distance hỗ trợ số không âm; depth/within dương và không nhỏ hơn pattern. Relative cần content đứng trước; không trộn absolute/relative trên cùng content.
+- flags dạng tập cờ chính xác hoặc 0; chưa hỗ trợ masks/modifiers.
+- dsize: n, >n, <n, a<>b; object lưu (operator, low, high). Matcher sau này phải áp dụng khoảng a<>b với hai cận loại trừ, so theo byte payload gốc.
+- flow: to_server/to_client và established/not_established; cặp mâu thuẫn bị từ chối.
+- classtype giữ tên ký hiệu; chưa tra classification.config hay suy ra priority.
+
+### Phân loại kết quả
+
+- valid: có rule object.
+- invalid: cú pháp/giá trị sai, field bắt buộc thiếu, duplicate option đơn hoặc điều kiện mâu thuẫn.
+- unsupported: action/protocol/keyword nằm ngoài tập hỗ trợ, biến $HOME_NET, IP/port list/negation, content negation, flag modifier, escape ngoài tập hỗ trợ.
+
+Rule lỗi không trả object có thể chạy một phần. Parser báo vấn đề đầu tiên gặp; một rule vừa có lỗi vừa có keyword unsupported có thể được phân loại theo vấn đề gặp trước. Comment/dòng trống, rule nhiều dòng và enable/disable thuộc Loader sẽ làm sau. ip/any ở vị trí protocol chưa được hỗ trợ, giữ phạm vi bắt buộc tcp/udp của bảng đề bài; không nhầm với any ở địa chỉ/port.
+
+Test: TEST/BT3/test_rule_parser.py. Chạy cùng context và hồi quy hai bài trước; kết quả tại TEST/BT3/result/rule_parser.txt và .xml.
