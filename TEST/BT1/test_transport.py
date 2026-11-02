@@ -11,7 +11,8 @@ def test_tcp_handshake(flags):
         sport=12345, dport=80, flags=flags, seq=100, ack=200, window=4096)))
     event = parse_packet(packet)
     assert event['transport'] == dict(protocol='TCP', src_port=12345, dst_port=80,
-                                     flags=flags, seq=100, ack=200, window=4096)
+                                     flags=flags, seq=100, ack=200, window=4096,
+                                     payload_length=0, raw_payload_base64='')
     assert event['application']['protocol'] == 'UNKNOWN'
 
 
@@ -31,6 +32,7 @@ def test_udp_and_ipv4():
     assert event['network'] == dict(src_ip='10.0.0.1', dst_ip='10.0.0.2',
                                     ttl=32, protocol=17, id=42, length=31)
     assert event['transport'] == dict(protocol='UDP', src_port=12345, dst_port=9000,
-                                      length=11, checksum=packet[UDP].chksum)
+                                      length=11, checksum=packet[UDP].chksum,
+                                      payload_length=3, raw_payload_base64='YWJj')
     assert packet[UDP].chksum is not None
     assert event['application']['protocol'] == 'UNKNOWN'

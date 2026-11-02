@@ -3,7 +3,6 @@ import json
 import sys
 
 from scapy.error import Scapy_Exception
-from scapy.layers.inet import TCP
 from datetime import datetime, timezone
 from functools import partial
 from itertools import count
@@ -26,8 +25,6 @@ def handle_packet(packet, writer, packet_ids, tracker=None):
         parsed["timestamp"] = datetime.fromtimestamp(
             float(packet.time), tz=timezone.utc
         ).isoformat(timespec="microseconds").replace("+00:00", "Z")
-        if packet.haslayer(TCP):
-            parsed["transport"]["payload_length"] = len(bytes(packet[TCP].payload))
         parsed = decode_event(parsed)
         parsed = preprocess_event(parsed)
         if parsed["processing_action"] == "drop":

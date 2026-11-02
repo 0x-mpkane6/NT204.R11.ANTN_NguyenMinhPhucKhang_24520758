@@ -99,6 +99,8 @@ class FlowTracker:
                 'forward_byte_count': 0, 'backward_byte_count': 0,
                 'SYN_count': 0, 'ACK_count': 0, 'FIN_count': 0, 'RST_count': 0,
                 'state': 'NEW' if protocol == 'TCP' else 'ACTIVE',
+                'client': None, 'server': None, 'role_source': None,
+                'established': None, 'established_source': None,
                 '_first': now, '_last': now, '_a': endpoints[0],
                 '_syn': set(), '_synack': set(), '_fin': {}, '_finacked': set(),
             }
@@ -117,6 +119,14 @@ class FlowTracker:
         if app in ('HTTP', 'DNS', 'SMTP'):
             flow['application_protocol'] = app
         if protocol == 'TCP':
+            if 'S' in flags and flow['role_source'] is None:
+                client, server = (endpoints[1], endpoints[0]) if 'A' in flags else endpoints
+                flow['client'] = {'ip': client[0], 'port': client[1]}
+                flow['server'] = {'ip': server[0], 'port': server[1]}
+                flow['role_source'] = 'tcp_synack' if 'A' in flags else 'tcp_syn'
+                if flow['established'] is None:
+                    flow['established'] = False
+                    flow['established_source'] = 'handshake_in_progress'
             for flag, name in [('S', 'SYN'), ('A', 'ACK'), ('F', 'FIN'), ('R', 'RST')]:
                 flow[name + '_count'] += int(flag in flags)
             if 'R' in flags:
@@ -130,10 +140,14 @@ class FlowTracker:
                         flow['state'] = 'HANDSHAKE'
                 if 'A' in flags and 'S' not in flags:
                     if opposite in flow['_synack'] and direction in flow['_syn']:
+                        flow['established'] = True
+                        flow['established_source'] = 'observed_handshake'
                         if flow['state'] in ('NEW', 'HANDSHAKE'):
                             flow['state'] = 'ESTABLISHED'
                     elif flow['state'] == 'NEW':
                         flow['state'] = 'ESTABLISHED'
+                        flow['established'] = True
+                        flow['established_source'] = 'inferred_midstream'
                     fin_end = flow['_fin'].get(opposite)
                     ack = transport.get('ack')
                     if fin_end is not None and type(ack) is int and (ack - fin_end) % (2**32) < 2**31:
@@ -145,8 +159,13 @@ class FlowTracker:
                     flow['state'] = 'CLOSING'
                 if len(flow['_fin']) == 2 and len(flow['_finacked']) == 2:
                     flow['state'] = 'CLOSED'
+        service_direction = None
+        if flow['client'] is not None:
+            service_direction = 'to_server' if endpoints[0] == (flow['client']['ip'], flow['client']['port']) else 'to_client'
+        context = self.snapshot(flow)
+        context.update(direction=direction, service_direction=service_direction)
         result.update(track_status='tracked', track_reason=None,
-                      flow={'flow_id': flow['flow_id'], 'direction': direction, 'state': flow['state']})
+                      flow=context)
         if flow['state'] in ('CLOSED', 'RESET'):
             self.close(key, 'tcp_' + flow['state'].lower())
         return result
