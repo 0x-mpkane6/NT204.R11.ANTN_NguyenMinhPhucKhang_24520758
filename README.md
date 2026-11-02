@@ -227,3 +227,16 @@ Test live capture sử dụng giả lập; PCAP pipeline có test đọc file th
 **Công cụ:** OpenAI Codex. **Mục đích:** hỗ trợ triển khai, rà soát, kiểm thử và viết tài liệu.
 
 Các phần có AI hỗ trợ gồm application detector và parser HTTP/DNS/SMTP, bảo toàn raw/MIME, tích hợp pipeline, JSONL writer và timestamp, xử lý lỗi, Decoder, Preprocessor, Flow Tracker, script/báo cáo kiểm thử và README. Người thực hiện cần kiểm tra, hiểu và giải thích được mã nguồn đã nộp.
+
+## Bài 3 — chạy Core Engine
+
+Pipeline đã tích hợp rule matching sau Flow Tracker. Mặc định nạp `rules/local.rules` (signature demo), sinh thêm `output/detections_<thời gian>.jsonl`. HTTP GET/EHLO trong bộ demo là dấu hiệu traffic, không phải kết luận tấn công.
+
+```bash
+.venv/bin/python main.py --pcap pcap/test-traffic.pcap --rules rules/local.rules
+sudo .venv/bin/python main.py --interface wlp8s0 --rules rules/local.rules
+```
+
+`--rules` lặp để nạp nhiều file; `--disable-rule-file`, `--disable-sid`, `--enable-sid` điều khiển bật/tắt; `--detection-output` chọn file detection; `--allow-inferred-established` chấp nhận trạng thái TCP suy luận. Xem [tài liệu engine](src/engine/README.md) để biết chính sách và giới hạn.
+
+Khi chạy, CLI hiển thị kết quả nạp và diagnostic rule; khi kết thúc in thống kê event/candidate/match. File detection chỉ có dòng khi match. Test bài 3 nằm trong `TEST/BT3/`, báo cáo tích hợp tại `TEST/BT3/result/integration.txt` và `.xml`.

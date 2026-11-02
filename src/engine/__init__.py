@@ -8,3 +8,13 @@ __all__ += ['parse_rule', 'Rule', 'RuleHeader', 'ContentCondition', 'RuleParseRe
 from .rule_loader import RuleFile, RuleLoadReport, load_rules
 
 __all__ += ['RuleFile', 'RuleLoadReport', 'load_rules']
+from .repository import RuleRepository
+
+__all__ += ['RuleRepository']
+from .matcher import RuleMatcher, MatchResult
+
+__all__ += ['RuleMatcher', 'MatchResult']
+from .evaluator import EvaluationEngine, EvaluationResult
+from .detection import generate_detection
+
+__all__ += ['EvaluationEngine', 'EvaluationResult', 'generate_detection']
