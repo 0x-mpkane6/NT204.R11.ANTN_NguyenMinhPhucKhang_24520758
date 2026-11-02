@@ -8,3 +8,6 @@ __all__ += ['parse_rule', 'Rule', 'RuleHeader', 'ContentCondition', 'RuleParseRe
 from .rule_loader import RuleFile, RuleLoadReport, load_rules
 
 __all__ += ['RuleFile', 'RuleLoadReport', 'load_rules']
+from .repository import RuleRepository
+
+__all__ += ['RuleRepository']

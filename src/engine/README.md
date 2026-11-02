@@ -1,6 +1,6 @@
 # Engine input — bước nền bài 3
 
-Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Chưa có Repository, matcher/evaluator.
+Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer; chưa có matcher/evaluator.
 
 ```python
 from src.engine import build_context
@@ -41,7 +41,7 @@ OpenAI Codex hỗ trợ triển khai và kiểm thử bước này.
 
 ## Internal Rule Object và Parser/Validator
 
-Parser/Validator đã có; Rule Loader được trình bày bên dưới. Chưa có Repository hoặc Matching Engine.
+Parser/Validator đã có; Rule Loader được trình bày bên dưới. Repository/Indexer được trình bày bên dưới; chưa có Matching Engine.
 
 | File | Vai trò |
 |---|---|
@@ -88,7 +88,7 @@ Test: TEST/BT3/test_rule_parser.py. Chạy cùng context và hồi quy hai bài 
 
 ## Rule Loader
 
-`rule_loader.py` đọc một/nhiều file và gọi Parser/Validator cho từng dòng có nội dung. Loader chưa được nối CLI/main; chưa có Repository/Matching Engine.
+`rule_loader.py` đọc một/nhiều file và gọi Parser/Validator cho từng dòng có nội dung. Loader chưa được nối CLI/main; đã có Repository bên dưới, chưa có Matching Engine.
 
 ```python
 from src.engine import RuleFile, load_rules
@@ -116,3 +116,41 @@ print(report.counts)
 RuleLoadReport.rules là danh sách dùng cho Repository sau này. results giữ kết quả parse kể cả rule valid bị disable/trùng. diagnostics chứa status, source, line_number, reasons, sid; caller hiển thị/ghi cảnh báo, Loader không tự in ra stdout. counts tổng hợp loaded, invalid, unsupported, disabled_rules/files, file_errors và duplicates. Cấu hình sai kiểu SID/enabled gây ValueError, khác với lỗi dữ liệu rule được thu thập an toàn.
 
 Test: TEST/BT3/test_rule_loader.py; báo cáo hồi quy: TEST/BT3/result/rule_loader.txt và .xml.
+
+## Rule Repository / Indexer
+
+`repository.py` cung cấp `RuleRepository`, nhận các Rule đã validate từ Loader:
+
+```python
+from src.engine import load_rules, RuleRepository, build_context
+
+report = load_rules(['rules/local.rules'])
+repository = RuleRepository(report.rules)
+context = build_context(event)
+candidates = repository.candidates(context)
+print(repository.last_query)
+```
+
+Chỉ khởi tạo repository một lần khi nạp rule. `add(rule)` thêm rule hợp lệ; SID trùng gây ValueError, vì Loader đã có chính sách xử lý duplicate. Repository kiểm tra header tối thiểu; caller vẫn phải dùng Parser/Validator cho toàn bộ option.
+
+### Chỉ mục và lựa chọn
+
+1. Tách protocol TCP/UDP.
+2. Theo destination port của event, lấy rule exact từ dictionary, rule any từ set, rule range chứa port từ danh sách range.
+3. Với rule <>, lập thêm entry theo source port của rule để không bỏ sót chiều đảo.
+4. Kiểm tra cả hai IP/CIDR, source/destination port và direction trên tập vừa lấy.
+5. Trả rule không trùng, giữ thứ tự nạp ban đầu.
+
+IP any là wildcard và port any là khoảng 0–65535. Protocol ip/any chưa được parser hỗ trợ; không được coi chúng là wildcard một cách âm thầm. CIDR được biên dịch thành IPv4Network một lần khi thêm rule.
+
+### Hiệu năng và bảo toàn dữ liệu
+
+Rule exact port không liên quan được loại qua chỉ mục mà không kiểm tra từng header. Range hiện duyệt tuyến tính theo số range của protocol; không bung khoảng 0–65535 thành hàng nghìn phần tử. Nếu nhiều rule any hoặc range phủ rộng thì vẫn có nhiều candidates. Đây là index cơ bản, chưa phải thuật toán interval tree.
+
+`last_query` chứa indexed_rules, header_checks, candidates và reason. header_checks đếm số rule đã kiểm tra đầy đủ header, không bao gồm số range đã quét; đây không phải tổng số phép toán. Test 500 exact-port rules xác nhận chỉ một header được kiểm tra cho port 80.
+
+Repository sao chép rule lúc thêm và khi trả kết quả để code bên ngoài không sửa rule làm lệch index. Context invalid/thiếu field, port/IP sai hoặc protocol không hỗ trợ trả [] và last_query.reason. Context partial vẫn có thể chọn theo header nếu các field header hợp lệ.
+
+Candidate chưa phải MATCH: chưa kiểm tra content, flags/dsize hoặc flow conditions. Matching Engine sẽ kiểm tra các điều kiện còn lại, không được sinh Detection Event chỉ vì rule nằm trong candidates. Module chưa nối main/CLI vì chưa có Evaluator.
+
+Test: TEST/BT3/test_repository.py, bao phủ protocol, any/CIDR, exact/range/boundaries, ->/<>, source port, chống trùng, bảo toàn index, malformed context và nối Loader. Báo cáo: TEST/BT3/result/repository.txt và .xml.
