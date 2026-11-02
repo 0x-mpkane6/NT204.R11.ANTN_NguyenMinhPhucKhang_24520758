@@ -20,7 +20,7 @@ def capture_live(interface, handler, on_idle=None):
         options = {'timeout': 1} if on_idle else {}
         sniff(
             iface=interface, prn=dispatch,
-            stop_filter=lambda packet: bool(failures), store=False, **options
+            stop_filter=lambda packet: bool(failures), store=False, chainCC=True, **options
         )
         if failures or on_idle is None:
             break

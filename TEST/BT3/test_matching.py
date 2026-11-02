@@ -67,3 +67,29 @@ def test_decoded_buffer_and_malformed():
     c = context(buffers={'http.uri.decoded': b'/admin'})
     assert RuleMatcher(buffer_name='http.uri.decoded').match(r, c).status == 'MATCH'
     assert not RuleMatcher().match(r, None).complete
+
+
+def test_flow_tracker_to_server_established_integration():
+    from scapy.layers.inet import IP, TCP
+    from src.parser.packet_parser import parse_packet
+    from src.preprocessor import preprocess_event
+    from src.flow import FlowTracker
+    from src.engine import build_context
+    tracker = FlowTracker()
+    matcher = RuleMatcher()
+    r = rule('flow:to_server,established;')
+    states = []
+    for flags, reverse in [('S', False), ('SA', True), ('A', False), ('A', True)]:
+        src, dst, sport, dport = ('10.0.0.2', '10.0.0.1', 80, 12345) if reverse else ('10.0.0.1', '10.0.0.2', 12345, 80)
+        parsed = parse_packet(IP(bytes(IP(src=src, dst=dst)/TCP(sport=sport, dport=dport, flags=flags))))
+        parsed['timestamp'] = '2026-11-02T00:00:00Z'
+        ctx = build_context(tracker.track(preprocess_event(parsed)))
+        states.append(matcher.match(r, ctx).status)
+    assert states == ['NO_MATCH', 'NO_MATCH', 'MATCH', 'NO_MATCH']
+
+
+def test_matcher_direction_reverse():
+    bidirectional = parse_rule('alert tcp 10.0.0.1 12345 <> 10.0.0.2 80 (msg:"x"; sid:2; rev:1;)').rule
+    reverse = context(src_ip='10.0.0.2', dst_ip='10.0.0.1', src_port=80, dst_port=12345)
+    assert RuleMatcher().match(bidirectional, reverse).status == 'MATCH'
+    assert RuleMatcher().match(rule(), reverse).status == 'NO_MATCH'

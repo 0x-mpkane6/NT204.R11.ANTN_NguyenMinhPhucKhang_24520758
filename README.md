@@ -240,3 +240,5 @@ sudo .venv/bin/python main.py --interface wlp8s0 --rules rules/local.rules
 `--rules` lặp để nạp nhiều file; `--disable-rule-file`, `--disable-sid`, `--enable-sid` điều khiển bật/tắt; `--detection-output` chọn file detection; `--allow-inferred-established` chấp nhận trạng thái TCP suy luận. Xem [tài liệu engine](src/engine/README.md) để biết chính sách và giới hạn.
 
 Khi chạy, CLI hiển thị kết quả nạp và diagnostic rule; khi kết thúc in thống kê event/candidate/match. File detection chỉ có dòng khi match. Test bài 3 nằm trong `TEST/BT3/`, báo cáo tích hợp tại `TEST/BT3/result/integration.txt` và `.xml`.
+
+Bảng đối chiếu đầy đủ 14 testcase bài 3 và bằng chứng chạy mới nhất: [TEST/BT3/README.md](TEST/BT3/README.md).
