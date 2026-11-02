@@ -1,6 +1,6 @@
 # Engine input — bước nền bài 3
 
-Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer; chưa có matcher/evaluator.
+Hiện có context adapter, Internal Rule Object, Parser/Validator và Rule Loader. Đã có Repository/Indexer và Matching Engine; chưa có Evaluator/Detection Generator.
 
 ```python
 from src.engine import build_context
@@ -154,3 +154,37 @@ Repository sao chép rule lúc thêm và khi trả kết quả để code bên n
 Candidate chưa phải MATCH: chưa kiểm tra content, flags/dsize hoặc flow conditions. Matching Engine sẽ kiểm tra các điều kiện còn lại, không được sinh Detection Event chỉ vì rule nằm trong candidates. Module chưa nối main/CLI vì chưa có Evaluator.
 
 Test: TEST/BT3/test_repository.py, bao phủ protocol, any/CIDR, exact/range/boundaries, ->/<>, source port, chống trùng, bảo toàn index, malformed context và nối Loader. Báo cáo: TEST/BT3/result/repository.txt và .xml.
+
+## Rule Matching Engine
+
+`matcher.py` cung cấp `RuleMatcher` và `MatchResult`; `matchers/` chứa header.py, flow.py, packet.py, content.py. Đây là một module matching với các thành phần nội bộ. Chưa có Evaluator/Detection Generator hoặc tích hợp CLI.
+
+```python
+from src.engine import RuleMatcher
+
+matcher = RuleMatcher()
+for rule in repository.candidates(context):
+    result = matcher.match(rule, context)
+    print(result.status, result.reason, result.matched)
+```
+
+Input rule phải từ Parser/Validator; context từ build_context. Matcher không in alert và không sửa input. Kết quả gồm status MATCH/NO_MATCH, sid, reason, matched và complete. complete=False báo chưa đánh giá đầy đủ do context/buffer lỗi hoặc giới hạn tài nguyên; không được coi là bằng chứng payload sạch. matched chứa content_index, field, start/end (end loại trừ) và pattern_hex, dùng được trong JSON Detection Event sau này. Rule không có content có thể MATCH với matched=[] nếu các điều kiện khác thỏa.
+
+Thứ tự: header → flow → packet → content. Header không khớp thì không truy cập payload. Header hỗ trợ protocol, IPv4/CIDR/any, port range và ->/<>; vẫn kiểm tra lại dù Repository đã lọc.
+
+Flow to_server/to_client dựa service_direction, không dựa forward/backward. established mặc định cần established=True và established_source=observed_handshake. Có thể bật allow_inferred_established=True để chấp nhận trạng thái suy luận bắt giữa phiên. not_established chỉ chấp nhận False, không coi None là False. Tracker giữ established khi đóng; matcher sử dụng giá trị này để biết flow đã thiết lập trước đó.
+
+Flags khớp tập cờ chính xác, không phụ thuộc thứ tự; 0 biểu diễn không có cờ. dsize dùng payload_size gốc, hỗ trợ =, >, < và khoảng hai cận loại trừ.
+
+Content mặc định tìm trong buffers.payload. Có thể chọn buffer_name khi tạo matcher, ví dụ http.uri.decoded; đây là cấu hình của project, chưa hỗ trợ keyword chọn buffer Snort. Mọi content của rule dùng cùng buffer. dsize không đổi theo buffer decoded.
+
+- nocase dùng bytes.lower(), chỉ gấp chữ hoa ASCII, không case-fold Unicode.
+- offset là vị trí bắt đầu tuyệt đối; depth là số byte từ offset.
+- distance là số byte bỏ qua từ cuối content trước; within là giới hạn từ cuối content trước, bao gồm khoảng distance.
+- Không có relative modifier thì content được tìm độc lập từ đầu buffer (hoặc offset).
+- Pattern phải nằm trọn trong cửa sổ. Vị trí tính theo byte, không phải ký tự.
+- Giữ các trạng thái vị trí kết thúc khác nhau để thử chuỗi relative ở các lần xuất hiện khác; không chỉ chọn lần xuất hiện đầu tiên. Các trạng thái cùng end được gộp vì các điều kiện sau chỉ phụ thuộc end.
+
+Giới hạn mặc định: max_buffer_bytes=1 MiB, max_content_steps=100000 lần tìm kiếm trong một rule. Vượt giới hạn trả NO_MATCH với complete=False và reason riêng. Không có stream reassembly, regex hay keyword ngoài phạm vi parser.
+
+Test: TEST/BT3/test_matching.py; bao phủ header short-circuit, flow observed/inferred/unknown, content case, offset/depth, distance/within, backtracking, binary, flags/dsize, evidence và giới hạn. Báo cáo hồi quy: TEST/BT3/result/matching.txt và .xml.

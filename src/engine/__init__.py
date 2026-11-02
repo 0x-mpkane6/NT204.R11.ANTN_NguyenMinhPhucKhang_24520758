@@ -11,3 +11,6 @@ __all__ += ['RuleFile', 'RuleLoadReport', 'load_rules']
 from .repository import RuleRepository
 
 __all__ += ['RuleRepository']
+from .matcher import RuleMatcher, MatchResult
+
+__all__ += ['RuleMatcher', 'MatchResult']
